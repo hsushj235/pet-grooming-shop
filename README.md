@@ -171,74 +171,212 @@ npm run build        # 构建生产版本（产物输出到 dist/）
 
 ---
 
-## 部署指南
+## 部署指南（PythonAnywhere + Vercel）
 
-> 本部分参考前后端分离部署的通用思路（前端 / API / 数据库分三部分部署）。本项目为 Django 托管 Vite 构建产物的一体化结构，可在「一体化部署」与「前后端分离」两种模式中选择。
+> 本项目当前生产部署方案：**PythonAnywhere 托管 Django 后端**（免费、无需银行卡），**Vercel 托管 Vue 前端**。结构与知识库「前端 / API / 数据库」三件套思路一致：[cite:ada372a5-1][cite:ada372a5-2]
 
-### 方案 A：单服务器一体化部署（推荐，结构最简单）
+### 整体架构
 
-本项目前端构建产物由 Django 直接托管，因此可直接作为单一 Web 服务部署到一台服务器。
-
-1. **构建前端**：
-   ```powershell
-   cd D:\项目1\frontend
-   npm run build          # 产物输出到 frontend/dist/
-   ```
-2. **关闭 DEBUG 并配置安全项**（`myproject/settings.py`）：
-   - `DEBUG = False`
-   - 设置真实的 `SECRET_KEY`
-   - `ALLOWED_HOSTS = ['你的域名或IP']`
-3. **收集静态文件**：
-   ```powershell
-   python manage.py collectstatic
-   ```
-4. **迁移数据库**：
-   ```powershell
-   python manage.py migrate
-   python manage.py createsuperuser
-   ```
-5. **启用生产级 WSGI 服务器**（如 Gunicorn）：
-   ```powershell
-   pip install gunicorn
-   gunicorn myproject.wsgi:application --bind 0.0.0.0:8000
-   ```
-6. **反向代理**：用 **Nginx** 将 80/443 端口转发到 8000，并托管 `staticfiles/` 与 `frontend/dist/assets/` 等静态资源。
-
-> ⚠️ `DEBUG=True` 仅用于开发，**禁止用于生产环境**。
-
-### 方案 B：前后端分离部署（参考知识库通用三件套）
-
-如果希望复用「前端 / API / 数据库」分开部署的思路（如部署到 Vercel / Render / 云数据库），可按以下拆解：前端部署后，将其所有 `axios`/`fetch` 请求地址从 `http://localhost:8000/...` 改为你后端的线上地址（`https://你的后端地址/api/...`）。[cite:ada372a5-1]
-
-#### ① 数据库层
-- 后端连接线上数据库（如 PostgreSQL），把 `settings.py` 的 `DATABASES` 指向云数据库连接串（`postgresql://user:password@xxx:/postgres` 形式），并通过环境变量注入，避免明文写在代码里。
-
-#### ② 后端 API 层
-- 把后端代码推送到 GitHub，托管平台（如 Render）读取仓库后指定启动命令，例如 `gunicorn myproject.wsgi:application`。
-- 通过平台的环境变量面板配置 `DATABASE_URL`、`SECRET_KEY`、`DEBUG=False` 等。[cite:ada372a5-2]
-
-#### ③ 前端层
-- 将 `frontend/` 部署到 Vercel 等静态托管平台（Vite 项目会自动执行 `npm run build` 并发布 `dist/`）。
-
-#### ④ 跨域 CORS
-因为前端域名与后端域名不同，浏览器会阻止跨域请求，需在后端启用 CORS。Django 中可安装 `django-cors-headers` 并在 `settings.py` 配置允许的来源（对应 Node 方案的 `app.use(cors())`）。[cite:ada372a5-1]
-
-#### 完整请求链路
 ```
 用户浏览器
    │
    ▼
-前端静态站（Vercel 等）
-   │  发起 POST /api/booking/
+Vercel（前端静态站 Vue 3 + Vite）
+   │  发起 POST ${VITE_API_BASE}/api/booking/
    ▼
-后端 API（Gunicorn / Render 等）
+PythonAnywhere（Django + WhiteNoise 静态资源）
    │
    ▼
-数据库（SQLite 或 PostgreSQL）
-   │
-   ▼
-返回 JSON → 页面显示预约结果
+SQLite 文件（项目目录下，PythonAnywhere 免费账号即可）
 ```
+
+### 为什么选 PythonAnywhere
+
+- 专门为 Django 优化，免费 Beginner 账号完全够用（1 个 Web App + 512MB 磁盘 + SQLite）。[cite:ada372a5-2]
+- **不需要银行卡**（不像 Render/Railway/Fly.io 部分功能要求绑卡）。
+- 自动 HTTPS（`*.pythonanywhere.com`），省去证书申请。
+
+### 准备工作（一次性）
+
+#### ① 把代码推送到 GitHub
+
+```powershell
+cd D:\项目1
+git add -A
+git commit -m "feat: 部署配置 - requirements/PythonAnywhere/生产配置/前端API_BASE"
+git push origin main
+```
+
+> 仓库已存在 `origin: https://github.com/hsushj235/pet-grooming-shop.git`。
+
+#### ② 生成 Django SECRET_KEY
+
+在本地生成一个复杂随机串（保存到本地备用）：
+
+```powershell
+./venv/Scripts/python.exe -c "import secrets; print(secrets.token_urlsafe(50))"
+```
+
+### 部署后端到 PythonAnywhere
+
+#### ① 注册与控制台
+
+1. 打开 <https://www.pythonanywhere.com/registration/>，注册免费 Beginner 账号（邮箱 + 用户名）。
+2. 登录后顶部菜单 **Consoles** → **Bash**，打开一个 Bash 控制台。
+
+#### ② 拉取代码并创建虚拟环境
+
+在 Bash 控制台里依次执行（把 `你的用户名` 替换成 PythonAnywhere 给你的用户名，例如 `hsushj235`）：
+
+```bash
+cd ~
+git clone https://github.com/hsushj235/pet-grooming-shop.git
+cd pet-grooming-shop
+
+# 创建虚拟环境并安装依赖
+mkvirtualenv --python=python3.12 venv
+pip install -r requirements.txt
+```
+
+> 首次使用 `mkvirtualenv` 会自动激活虚拟环境，下次进入用 `workon venv`。
+
+#### ③ 构建前端
+
+Django 的 collectstatic 需要前端的 `dist/` 已构建好。两种方式：
+
+**方式 A：在本地构建并提交到仓库**（简单，但 dist 体积大）
+
+```powershell
+cd D:\项目1rontend
+npm run build
+cd ..
+git add -A && git commit -m "build: 前端 dist" && git push
+```
+
+然后在 PythonAnywhere Bash 里 `git pull`。
+
+**方式 B：在 PythonAnywhere 上构建**（需要 Node.js，免费账号默认没装，需要走 Task 计划或跳过；不推荐）
+
+> **推荐方式 A**：本地构建一次提交即可，PythonAnywhere 拉到的就是带 dist 的完整代码。
+
+#### ④ 数据库迁移与静态文件收集
+
+继续在 PythonAnywhere Bash 里：
+
+```bash
+workon venv
+cd ~/pet-grooming-shop
+
+# 迁移数据库（SQLite 文件会自动生成在 ~/pet-grooming-shop/db.sqlite3）
+python manage.py migrate
+
+# 创建超级管理员（可选，用于登录 /admin/）
+python manage.py createsuperuser
+
+# 收集静态文件（前端 dist + simpleui + admin 全部进入 ~/pet-grooming-shop/staticfiles/）
+python manage.py collectstatic --noinput
+```
+
+#### ⑤ 配置 Web App
+
+回到 PythonAnywhere 控制台 → **Web** → **Add a new web app**：
+
+- **Domain**：保持默认（你的用户名 + `pythonanywhere.com`）
+- **Web app type**：**Manual configuration** → **Python 3.12**
+
+然后进入 **Web** 页面顶部，往下到 **Virtualenv** 段，填入：
+
+```
+/home/你的用户名/.virtualenvs/venv
+```
+
+#### ⑥ 编辑 WSGI 配置文件
+
+**Web** 页面 → **Code** 段 → **WSGI configuration file** → 点击进入编辑。把全部内容**替换**为以下（记得替换所有 `你的用户名`）：
+
+```python
+import os
+import sys
+
+# 项目根目录
+path = '/home/你的用户名/pet-grooming-shop'
+if path not in sys.path:
+    sys.path.insert(0, path)
+
+# 激活虚拟环境
+activate_this = '/home/你的用户名/.virtualenvs/venv/bin/activate_this.py'
+with open(activate_this) as f:
+    exec(f.read(), {'__file__': activate_this})
+
+# Django 生产环境变量
+os.environ['DJANGO_SETTINGS_MODULE'] = 'myproject.settings'
+os.environ['DJANGO_PRODUCTION'] = 'true'
+os.environ['DJANGO_DEBUG'] = 'false'
+os.environ['DJANGO_SECRET_KEY'] = '第②步生成的随机串'
+os.environ['DJANGO_ALLOWED_HOSTS'] = '你的用户名.pythonanywhere.com'
+os.environ['DJANGO_CORS_ALLOWED_ORIGINS'] = 'https://你的vercel域名.vercel.app'
+os.environ['DJANGO_SSL_REDIRECT'] = 'false'  # PythonAnywhere 已自动 HTTPS
+
+from django.core.wsgi import get_wsgi_application
+application = get_wsgi_application()
+```
+
+> `DJANGO_SSL_REDIRECT=false` 是因为 PythonAnywhere 在 WSGI 层已做 HTTPS 跳转，避免重复。
+
+保存后回到 **Web** 页面顶部，点 **Reload**。
+
+#### ⑦ 验证后端
+
+访问 `https://你的用户名.pythonanywhere.com/`，应看到首页。访问 `/admin/` 用 superuser 登录。访问 `/api/bookings/` 应返回 JSON。
+
+### 部署前端到 Vercel
+
+#### ① Vercel 上导入项目
+
+1. 打开 <https://vercel.com> → 用 GitHub 登录。
+2. **Add New… → Project** → 选择 `hsushj235/pet-grooming-shop`。
+3. **Root Directory**：点击 Edit → 改成 `frontend`。
+
+#### ② 配置环境变量
+
+**Environment Variables** 段添加：
+
+| Key | Value |
+|-----|-------|
+| `VITE_API_BASE` | `https://你的用户名.pythonanywhere.com` |
+
+#### ③ 部署
+
+其它保持默认（Vercel 会自动执行 `npm run build`），点击 **Deploy**。完成后会得到一个 `*.vercel.app` 地址，例如 `https://pet-grooming-shop.vercel.app`。
+
+#### ④ 把 Vercel 域名写入后端 CORS
+
+回到 PythonAnywhere **Web** → WSGI 配置 → 修改：
+
+```python
+os.environ['DJANGO_CORS_ALLOWED_ORIGINS'] = 'https://实际vercel域名.vercel.app'
+```
+
+保存 → **Reload**。
+
+### 验证全链路
+
+1. 浏览器打开 Vercel 给的地址。
+2. 进入「预约」页面，填写表单提交。
+3. 浏览器开发者工具 Network 应看到一条 `POST https://你的用户名.pythonanywhere.com/api/booking/`，状态码 200。
+4. 返回 PythonAnywhere 后台 → `/admin/` → 预约记录，可看到新条目。
+
+### 数据库切换（可选：到 PostgreSQL）
+
+如果以后想把 SQLite 换成 PostgreSQL（数据更安全、更适合生产）：
+
+1. 在任何云平台（Render 免费 PostgreSQL / Supabase / Neon / ElephantSQL）创建一个免费 PostgreSQL，得到 `DATABASE_URL`。
+2. 编辑 PythonAnywhere WSGI 配置添加：
+   ```python
+   os.environ['DATABASE_URL'] = 'postgresql://user:pass@host:5432/dbname'
+   ```
+   （代码已经支持，settings.py 末尾生产块会优先用 DATABASE_URL，无需改代码）
+3. 在 Bash 控制台跑 `python manage.py migrate` 建表。
 
 ---
 
