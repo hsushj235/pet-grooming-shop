@@ -1,6 +1,9 @@
 ﻿import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
+// API 基础地址：本地默认走相对路径（与后端同域）；部署到独立后端时设置 VITE_API_BASE
+const API_BASE = import.meta.env.VITE_API_BASE || ''
+
 export const usePetShopStore = defineStore('petShop', {
   state: () => ({
     currentUser: null,
@@ -28,7 +31,7 @@ export const usePetShopStore = defineStore('petShop', {
     logout() { this.currentUser = null; },
     addCustomer(customer) { this.customers.unshift(customer); },
     async submitBooking(booking) {
-      const res = await fetch('/api/booking/', {
+      const res = await fetch(`${API_BASE}/api/booking/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(booking),

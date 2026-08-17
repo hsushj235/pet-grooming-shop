@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: pet-grooming-api
+    runtime: python
+    plan: free
+    rootDir: .
+    buildCommand: "pip install -r requirements.txt && python manage.py collectstatic --noinput && python manage.py migrate"
+    startCommand: "gunicorn myproject.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --timeout 60"
+    envVars:
+      - key: DJANGO_PRODUCTION
+        value: "true"
+      - key: DJANGO_DEBUG
+        value: "false"
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+        description: "Django 密钥（自动生成）"
+      - key: DJANGO_ALLOWED_HOSTS
+        value: "pet-grooming-api.onrender.com"
+      - key: DJANGO_CORS_ALLOWED_ORIGINS
+        value: "https://pet-grooming-shop.vercel.app"
+      - key: DJANGO_SSL_REDIRECT
+        value: "true"
+      - key: PYTHON_VERSION
+        value: "3.14.4"

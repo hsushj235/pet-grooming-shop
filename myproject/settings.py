@@ -133,3 +133,61 @@ MAILERS = {
         'BACKEND': 'django.core.mail.backends.console.EmailBackend',
     },
 }
+
+# ============================================================
+# 生产环境配置覆盖（部署到云端时通过环境变量激活）
+# 本地开发保持默认：DEBUG=True + SQLite，无需改动
+# ============================================================
+import os
+
+# 通过环境变量激活生产模式。Render/Vercel 等平台设置了本变量
+IS_PRODUCTION = os.environ.get('DJANGO_PRODUCTION', '') == 'true'
+
+if IS_PRODUCTION:
+    DEBUG = os.environ.get('DJANGO_DEBUG', 'false').lower() == 'true'
+    SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', SECRET_KEY)
+    ALLOWED_HOSTS = os.environ.get('DJANGO_ALLOWED_HOSTS', '*').split(',')
+
+    # ---- 数据库：优先使用 DATABASE_URL（对应云端 PostgreSQL）----
+    DATABASE_URL = os.environ.get('DATABASE_URL', '')
+    if DATABASE_URL:
+        import dj_database_url
+        DATABASES['default'] = dj_database_url.config(
+            default=DATABASE_URL,
+            conn_max_age=600,
+            conn_health_checks=True,
+        )
+    else:
+        # 无 DATABASE_URL 时回退到 SQLite，便于单机部署
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.sqlite3',
+                'NAME': BASE_DIR / 'db.sqlite3',
+            }
+        }
+
+    # ---- 安全 / 中间件 ----
+    # 生产强制 HTTPS、安全 Cookie
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SECURE_SSL_REDIRECT = os.environ.get('DJANGO_SSL_REDIRECT', 'true').lower() == 'true'
+    SESSION_COOKIE_SECURE = os.environ.get('DJANGO_COOKIE_SECURE', 'true').lower() == 'true'
+    CSRF_COOKIE_SECURE = os.environ.get('DJANGO_CSRF_COOKIE_SECURE', 'true').lower() == 'true'
+
+    # ---- CORS：前端与后端域名不同，需允许跨域（对应知识库思路）----
+    CORS_ALLOWED_ORIGINS = [
+        o for o in os.environ.get(
+            'DJANGO_CORS_ALLOWED_ORIGINS',
+            'https://your-frontend.vercel.app',
+        ).split(',') if o
+    ]
+    CORS_ALLOW_ALL_ORIGINS = os.environ.get('DJANGO_CORS_ALLOW_ALL', 'false').lower() == 'true'
+    if 'corsheaders' not in INSTALLED_APPS:
+        INSTALLED_APPS.insert(0, 'corsheaders')
+    if 'corsheaders.middleware.CorsMiddleware' not in MIDDLEWARE:
+        # 放最前，尽量靠前处理
+        MIDDLEWARE = ['corsheaders.middleware.CorsMiddleware', *MIDDLEWARE]
+
+    # ---- 静态文件：Whitenoise 托管（生产不需要单独静态服务器）----
+    if 'whitenoise.middleware.WhiteNoiseMiddleware' not in MIDDLEWARE:
+        MIDDLEWARE.append('whitenoise.middleware.WhiteNoiseMiddleware')
+    STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
