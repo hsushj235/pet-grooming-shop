@@ -12,6 +12,8 @@ class Contract(models.Model):
 
     pet_name = models.CharField('宠物姓名', max_length=100)
     pet_type = models.CharField('宠物类型', max_length=20, choices=PET_TYPE_CHOICES, default='dog')
+    breed = models.CharField('品种', max_length=100, blank=True, default='')
+    weight = models.DecimalField('体重(kg)', max_digits=5, decimal_places=1, blank=True, null=True)
     service = models.CharField('服务项目', max_length=200)
     date = models.DateField('预约日期')
     time = models.CharField('预约时段', max_length=20)

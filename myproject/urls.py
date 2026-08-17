@@ -6,15 +6,6 @@ from django.conf.urls.static import static
 from core import views
 import os
 
-def serve_public_files(request, path):
-    from django.http import FileResponse
-    public_dir = os.path.join(settings.BASE_DIR, 'frontend', 'public')
-    full_path = os.path.join(public_dir, path)
-    if os.path.isfile(full_path):
-        return FileResponse(open(full_path, 'rb'), as_attachment=False)
-    from django.http import Http404
-    raise Http404
-
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', TemplateView.as_view(template_name='index.html'), name='home'),
@@ -22,7 +13,13 @@ urlpatterns = [
     path('api/bookings/', views.api_list_bookings, name='api_bookings'),
 ]
 
+# 静态文件服务：包括 /assets/* 和 /static/*（使用 WhiteNoise）
 if settings.DEBUG:
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
-    urlpatterns += static('/assets/', document_root=str(settings.BASE_DIR / 'frontend' / 'dist' / 'assets'))
-    urlpatterns += static('/', document_root=str(settings.BASE_DIR / 'frontend' / 'public'), show_indexes=False)
+else:
+    # 生产环境：添加 /assets/* 路由（WhiteNoise 会自动处理这些文件）
+    from django.views.static import serve
+    urlpatterns += [
+        path('assets/<path:path>', serve, {'document_root': settings.STATIC_ROOT / 'assets'}),
+        path('favicon.svg', serve, {'document_root': settings.STATIC_ROOT}),
+    ]

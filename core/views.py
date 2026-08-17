@@ -19,6 +19,8 @@ def api_submit_booking(request):
 
     pet_name = data.get('petName', '').strip()
     pet_type = data.get('petType', 'dog')
+    breed = data.get('breed', '').strip()
+    weight = data.get('weight', '')
     service = data.get('service', '').strip()
     date = data.get('date', '').strip()
     time = data.get('time', '').strip()
@@ -41,9 +43,20 @@ def api_submit_booking(request):
     if errors:
         return JsonResponse({'code': 400, 'msg': '；'.join(errors)}, status=400)
 
+    # 体重转 Decimal
+    from decimal import Decimal, InvalidOperation
+    weight_val = None
+    if weight:
+        try:
+            weight_val = Decimal(weight)
+        except InvalidOperation:
+            pass
+
     contract = Contract.objects.create(
         pet_name=pet_name,
         pet_type=pet_type,
+        breed=breed,
+        weight=weight_val,
         service=service,
         date=date,
         time=time,
@@ -71,6 +84,8 @@ def api_list_bookings(request):
         'id': b.id,
         'pet_name': b.pet_name,
         'pet_type': b.pet_type,
+        'breed': b.breed,
+        'weight': float(b.weight) if b.weight else None,
         'service': b.service,
         'date': str(b.date),
         'time': b.time,
