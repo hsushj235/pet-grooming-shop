@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Bold gold paw print - highly visible at small sizes -->
+  <circle cx="50" cy="50" r="48" fill="#1a1a2e"/>
+  <!-- Main pad - large and prominent -->
+  <path d="M50,78 C30,78 22,62 26,48 C30,36 42,30 50,26 C58,30 70,36 74,48 C78,62 70,78 50,78Z" fill="#D4A843"/>
+  <!-- Four large toes -->
+  <ellipse cx="28" cy="30" rx="10" ry="14" fill="#D4A843" transform="rotate(-20,28,30)"/>
+  <ellipse cx="44" cy="18" rx="9" ry="13" fill="#D4A843" transform="rotate(-8,44,18)"/>
+  <ellipse cx="56" cy="18" rx="9" ry="13" fill="#D4A843" transform="rotate(8,56,18)"/>
+  <ellipse cx="72" cy="30" rx="10" ry="14" fill="#D4A843" transform="rotate(20,72,30)"/>
+</svg>

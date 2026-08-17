@@ -1,8 +1,8 @@
 ﻿# 依赖目录
 node_modules/
 
-# Vite 构建产物（由 Django 托管，不纳入版本控制）
-dist/
+# Vite 构建产物（保留 dist/ 入库，供 PythonAnywhere 等无 Node 环境直接 collectstatic）
+# dist/
 
 # 编辑器配置
 .vscode/

@@ -14,7 +14,7 @@ media/
 
 # Node / Vite
 node_modules/
-frontend/dist/
+# frontend/dist/   # 保留 dist/ 入库，供 PythonAnywhere 等无 Node 环境直接 collectstatic
 frontend/node_modules/
 
 # IDE
